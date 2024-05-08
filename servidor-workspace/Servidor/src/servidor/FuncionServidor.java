@@ -1,78 +1,97 @@
 package servidor;
 
 import java.io.*;
-import java.net.*;
-import java.util.concurrent.*;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Scanner;
 
 public class FuncionServidor {
+
     private ServerSocket serverSocket;
     private final int PUERTO = 1241;
-    private ExecutorService pool;
-    private Socket cliente1;
-    private Socket cliente2;
-    private PrintWriter outCliente1;
-    private PrintWriter outCliente2;
+    private List<DataOutputStream> clientStreams = new ArrayList<>();
+    private int maxClientes;
 
     public FuncionServidor(int maxClientes) throws IOException {
-        this.serverSocket = new ServerSocket(PUERTO);
-        this.pool = Executors.newFixedThreadPool(maxClientes);
+        this.maxClientes = maxClientes;
+        this.serverSocket = new ServerSocket(PUERTO); // Inicializamos el servidor
     }
 
-    public void runServer() {
-        System.out.println("Servidor iniciado en el puerto " + PUERTO);
+    public void runServer() throws IOException {
+        System.out.println("Esperando conexiones...");
 
-        try {
-            cliente1 = serverSocket.accept();
-            cliente2 = serverSocket.accept();
-            outCliente1 = new PrintWriter(cliente1.getOutputStream(), true);
-            outCliente2 = new PrintWriter(cliente2.getOutputStream(), true);
+        while (clientStreams.size() < maxClientes) {
+            Socket clientSocket = serverSocket.accept(); // Esperando a que algún cliente se conecte
+            System.out.println("Cliente conectado: " + clientSocket.getInetAddress().getHostAddress());
 
-            pool.execute(new ClientHandler(cliente1, outCliente2));
-            pool.execute(new ClientHandler(cliente2, outCliente1));
-        } catch (IOException e) {
-            System.out.println("Error al aceptar conexiones de clientes: " + e.getMessage());
+            DataOutputStream dataOutputStream = new DataOutputStream(clientSocket.getOutputStream());
+            clientStreams.add(dataOutputStream);
+
+            // Enviar mensaje de bienvenida al cliente
+            dataOutputStream.writeUTF("Conexión aceptada\n");
+
+            // Crear un nuevo hilo para manejar la conexión con el cliente
+            Thread clientHandler = new Thread(new ClientHandler(clientSocket));
+            clientHandler.start();
+        }
+        System.out.println("Se ha alcanzado el número máximo de clientes.");
+    }
+
+    // Clase interna para manejar cada cliente
+    private class ClientHandler implements Runnable {
+        private Socket clientSocket;
+        private BufferedReader bufferedReader;
+
+        public ClientHandler(Socket socket) throws IOException {
+            this.clientSocket = socket;
+            this.bufferedReader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+        }
+
+        @Override
+        public void run() {
+            try {
+                String receivedMessage;
+                while ((receivedMessage = bufferedReader.readLine()) != null) {
+                    if (!receivedMessage.trim().isEmpty()) {
+                        System.out.println("Recibido del Cliente: " + receivedMessage);
+                        broadcastMessage(receivedMessage);
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                try {
+                    clientSocket.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        // Método para enviar el mensaje a todos los clientes conectados
+        private void broadcastMessage(String message) {
+            for (DataOutputStream out : clientStreams) {
+                try {
+                    out.writeUTF(message + "\n");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
         }
     }
 
     public static void main(String[] args) {
-        int maxClientes = args.length > 0 ? Integer.parseInt(args[0]) : 2; // Dos clientes como máximo
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("Ingrese el número máximo de clientes:");
+        int maxClientes = scanner.nextInt();
+
         try {
             FuncionServidor servidor = new FuncionServidor(maxClientes);
             servidor.runServer();
         } catch (IOException e) {
-            System.out.println("Error al iniciar el servidor: " + e.getMessage());
-        }
-    }
-}
-
-class ClientHandler implements Runnable {
-    private Socket clientSocket;
-    private PrintWriter out;
-
-    public ClientHandler(Socket socket, PrintWriter out) {
-        this.clientSocket = socket;
-        this.out = out;
-    }
-
-    @Override
-    public void run() {
-        try {
-            BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-            String inputLine;
-
-            while ((inputLine = in.readLine()) != null) {
-                // Envía el mensaje recibido a todos los clientes conectados
-                System.out.println("Mensaje recibido: " + inputLine);
-                out.println("Cliente dice: " + inputLine);
-            }
-        } catch (IOException e) {
-            System.out.println("Error al manejar al cliente: " + e.getMessage());
-        } finally {
-            try {
-                clientSocket.close();
-            } catch (IOException e) {
-                System.out.println("Error al cerrar la conexión del cliente: " + e.getMessage());
-            }
+            e.printStackTrace();
         }
     }
 }

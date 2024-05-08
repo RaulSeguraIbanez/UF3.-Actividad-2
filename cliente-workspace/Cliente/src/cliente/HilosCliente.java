@@ -72,13 +72,4 @@ public class HilosCliente {
         }
     }
 
-    public static void main(String[] args) {
-        try {
-            Socket socket = new Socket("direccion_ip_del_servidor", 1235);
-            HilosCliente cliente = new HilosCliente(socket);
-            cliente.runCliente();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
 }
