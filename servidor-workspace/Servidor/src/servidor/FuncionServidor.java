@@ -7,8 +7,11 @@ import java.util.concurrent.*;
 public class FuncionServidor {
     private ServerSocket serverSocket;
     private final int PUERTO = 1241;
-    private final String PALABRA_CLAVE_SERVIDOR = "Cleopatra";
     private ExecutorService pool;
+    private Socket cliente1;
+    private Socket cliente2;
+    private PrintWriter outCliente1;
+    private PrintWriter outCliente2;
 
     public FuncionServidor(int maxClientes) throws IOException {
         this.serverSocket = new ServerSocket(PUERTO);
@@ -19,19 +22,20 @@ public class FuncionServidor {
         System.out.println("Servidor iniciado en el puerto " + PUERTO);
 
         try {
-            while (!serverSocket.isClosed()) {
-                Socket clientSocket = serverSocket.accept();
-                pool.execute(new ClientHandler(clientSocket, PALABRA_CLAVE_SERVIDOR));
-            }
+            cliente1 = serverSocket.accept();
+            cliente2 = serverSocket.accept();
+            outCliente1 = new PrintWriter(cliente1.getOutputStream(), true);
+            outCliente2 = new PrintWriter(cliente2.getOutputStream(), true);
+
+            pool.execute(new ClientHandler(cliente1, outCliente2));
+            pool.execute(new ClientHandler(cliente2, outCliente1));
         } catch (IOException e) {
             System.out.println("Error al aceptar conexiones de clientes: " + e.getMessage());
-        } finally {
-            pool.shutdown();
         }
     }
 
     public static void main(String[] args) {
-        int maxClientes = args.length > 0 ? Integer.parseInt(args[0]) : 5; // Número máximo de clientes como argumento
+        int maxClientes = args.length > 0 ? Integer.parseInt(args[0]) : 2; // Dos clientes como máximo
         try {
             FuncionServidor servidor = new FuncionServidor(maxClientes);
             servidor.runServer();
@@ -43,32 +47,23 @@ public class FuncionServidor {
 
 class ClientHandler implements Runnable {
     private Socket clientSocket;
-    private String palabraClaveServidor;
+    private PrintWriter out;
 
-    public ClientHandler(Socket socket, String palabraClaveServidor) {
+    public ClientHandler(Socket socket, PrintWriter out) {
         this.clientSocket = socket;
-        this.palabraClaveServidor = palabraClaveServidor;
+        this.out = out;
     }
 
     @Override
     public void run() {
         try {
             BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-            PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
             String inputLine;
 
-            out.println("Conexión aceptada. Escribe tu palabra clave para cerrar el chat.");
-
             while ((inputLine = in.readLine()) != null) {
-                if (inputLine.equalsIgnoreCase(palabraClaveServidor)) {
-                    out.println("Palabra clave del servidor detectada. Cerrando servidor.");
-                    System.exit(0);
-                } else if (inputLine.equalsIgnoreCase("Marc Antoni") || inputLine.equalsIgnoreCase("César")) {
-                    out.println("Palabra clave de cliente detectada. Cerrando chat.");
-                    break;
-                } else {
-                    out.println("Eco: " + inputLine);
-                }
+                // Envía el mensaje recibido a todos los clientes conectados
+                System.out.println("Mensaje recibido: " + inputLine);
+                out.println("Cliente dice: " + inputLine);
             }
         } catch (IOException e) {
             System.out.println("Error al manejar al cliente: " + e.getMessage());
