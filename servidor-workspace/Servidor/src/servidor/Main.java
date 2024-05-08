@@ -9,7 +9,7 @@ public class Main {
 		
 		System.out.print("Iniciando servidor...");
 		
-		FuncionServidor chat = new FuncionServidor();
+		FuncionServidor chat = new FuncionServidor(2);
 		
 		System.out.println("OK");
 		chat.runServer();

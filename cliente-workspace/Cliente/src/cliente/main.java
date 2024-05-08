@@ -7,7 +7,7 @@ public class main {
 
     public static void main(String[] args) {
         final int PUERTO = 1241;
-        final String HOST = "localhost";
+        final String HOST = "10.6.4.165";
 
         try (Socket socket = new Socket(HOST, PUERTO)) {
             HilosCliente cliente = new HilosCliente(socket);
